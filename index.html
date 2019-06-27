@@ -39,18 +39,56 @@ rbServer.on('close', function() {
     fbDiv.innerHTML += "<p>Connection to websocket server closed.</p>";
  });
 
-// These lines create a topic object as defined by roslibjs
+/*// These lines create a topic object as defined by roslibjs
 var cmdVelTopic = new ROSLIB.Topic({
     ros : rbServer,
     name : 'open_manipulator_msgs/SetKinematicsPose',
     messageType : 'geometry_msgs/Twist'
+});*/
+
+var listener = new ROSLIB.Topic({
+    ros : rbServer,
+    name : '/open_manipulator/gripper/kinematics_pose',
+    messageType : 'open_manipulator_msgs/KinematicsPose'
 });
+
+/*listener.subscribe(function(message) {
+    console.log('Received message on ' + listener.name + ': ' + message.pose.position.x);
+    listener.unsubscribe();
+});*/
 
 var moveArmClient = new ROSLIB.Service({
     ros: rbServer,
-    name : '/open_manipulator_msgs/SetKinematicsPose',
-    serviceType : 
-})
+    name : '/open_manipulator/goal_task_space_path_position_only',
+    serviceType : 'open_manipulator_msgs/SetKinematicsPose' 
+});
+
+var request = new ROSLIB.ServiceRequest({
+    planning_group : '',
+    end_effector_name : 'gripper',
+    kinematics_pose : {
+        pose : {
+            position : {
+                x : 0.286,
+                y : 0.0,
+                z : 0.2045
+            },
+            orientation : {
+                x : 0.0,
+                y : 0.0,
+                z : 0.0,
+                w : 1.0
+            }
+        },
+        max_accelerations_scaling_factor : 0.0,
+        max_velocity_scaling_factor : 0.0,
+        tolerance : 0.0
+    },
+    path_time : 2.0
+});
+
+var moving = false;
+/*
 
 // These lines create a message that conforms to the structure of the Twist defined in our ROS installation
 // It initalizes all properties to zero. They will be set to appropriate values before we publish this message.
@@ -65,19 +103,19 @@ var twist = new ROSLIB.Message({
         y : 0.0,
         z : 0.0
     }
-});
+});*/
 
 /* This function:
  - retrieves numeric values from the text boxes
  - assigns these values to the appropriate values in the twist message
  - publishes the message to the cmd_vel topic.
- */
+ 
 function pubMessage() {
     /**
     Set the appropriate values on the twist message object according to values in text boxes
     It seems that turtlesim only uses the x property of the linear object 
     and the z property of the angular object
-    **/
+    *
     var linearX = 0.0;
     var angularZ = 0.0;
 
@@ -92,42 +130,105 @@ function pubMessage() {
     // Publish the message 
     cmdVelTopic.publish(twist);
 }
+*/
+function moveRobot(message) {
+    if (!moving) {
+        moving = true;
+        var request1 = new ROSLIB.ServiceRequest({
+            planning_group : '',
+            end_effector_name : 'gripper',
+            kinematics_pose : message,
+            path_time : 2.0
+        });
+
+
+        moveArmClient.callService(request1, function(result) {
+            console.log('Result for service call on '
+            + moveArmClient.name
+            + ': '
+            + result.is_planned);
+        });
+        moving = false;
+    }
+}
 
 function moveUp() {
-    // Set the appropriate values on the message object
-    twist.linear.x = 2;
-    twist.angular.z = 0;
 
-    // Publish the message 
-    cmdVelTopic.publish(twist);
+    listener.subscribe(function(message) {
+        console.log('Received message on ' + listener.name + ': ' + message.pose.position.z);
+
+        message.pose.position.z = message.pose.position.z + 0.01;
+        console.log('z : ' + message.pose.position.z);
+        moveRobot(message);
+        listener.unsubscribe();
+    });
+
 }
 
 function moveDown() {
-    // Set the appropriate values on the message object
-    twist.linear.x = -2;
-    twist.angular.z = 0;
+    listener.subscribe(function(message) {
+        console.log('Received message on ' + listener.name + ': ' + message.pose.position.z);
 
-    // Publish the message 
-    cmdVelTopic.publish(twist);
+        message.pose.position.z = message.pose.position.z - 0.01;
+        console.log('z : ' + message.pose.position.z);
+        moveRobot(message);
+        listener.unsubscribe();
+    });
 }
 
 function moveLeft() {
-    // Set the appropriate values on the message object
-    twist.linear.x = 0;
-    twist.angular.z = 2;
+    listener.subscribe(function(message) {
+        console.log('Received message on ' + listener.name + ': ' + message.pose.position.y);
 
-    // Publish the message 
-    cmdVelTopic.publish(twist);
+        message.pose.position.y = message.pose.position.y + 0.01;
+        console.log('y : ' + message.pose.position.y);
+        moveRobot(message);
+        listener.unsubscribe();
+    });
 }
 
 function moveRight() {
-    // Set the appropriate values on the message object
-    twist.linear.x = 0;
-    twist.angular.z = -2;
+    listener.subscribe(function(message) {
+        console.log('Received message on ' + listener.name + ': ' + message.pose.position.y);
 
-    // Publish the message 
-    cmdVelTopic.publish(twist);
+        message.pose.position.y = message.pose.position.y - 0.01;
+        console.log('y : ' + message.pose.position.y);
+        moveRobot(message);
+        listener.unsubscribe();
+    });
 }
+
+function moveForward() {
+    listener.subscribe(function(message) {
+        console.log('Received message on ' + listener.name + ': ' + message.pose.position.x);
+
+        message.pose.position.x = message.pose.position.x + 0.01;
+        console.log('x : ' + message.pose.position.x);
+        moveRobot(message);
+        listener.unsubscribe();
+    });
+}
+
+function moveBackward() {
+    listener.subscribe(function(message) {
+        console.log('Received message on ' + listener.name + ': ' + message.pose.position.x);
+
+        message.pose.position.x = message.pose.position.x - 0.01;
+        console.log('x : ' + message.pose.position.x);
+        moveRobot(message);
+        listener.unsubscribe();
+    });
+}
+
+function resetPos() {
+    moveArmClient.callService(request, function(result) {
+        console.log('Result for service call on '
+        + moveArmClient.name
+        + ': '
+        + result.is_planned);
+    });
+}
+
 </script>
 </head>
 
@@ -136,8 +237,12 @@ function moveRight() {
 <button id="up" type="button" onclick="moveUp()">UP</button>
 <button id="down" type="button" onclick="moveDown()">DOWN</button>
 <button id="left" type="button" onclick="moveLeft()">LEFT</button>
-<button id="right" type="button" onclick="MoveRight()">RIGHT</button>
+<button id="right" type="button" onclick="moveRight()">RIGHT</button>
+<button id="left" type="button" onclick="moveForward()">FORWARD</button>
+<button id="right" type="button" onclick="moveBackward()">BACKWARD</button>
+<button id="reset" type="button" onclick="resetPos()">RESET POS</button>
 </form>
 <div id="feedback"></div>
+<div id="output"></div>
 </body>
 </html>
