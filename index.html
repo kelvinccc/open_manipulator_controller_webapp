@@ -1,69 +1,60 @@
 <!DOCTYPE html>
 <html>
 <head>
-<!-- Based on tutorial found here:
-http://iguanatronics.com/simple-tutorial-on-rosbridge-and-roslibjs/
--->
 
-<!--
-The next two lines bring in the JavaScript files that support rosbridge integration.
--->
+<!-- Import joslibjs and eventEmitter2 -->
 <script type="text/javascript" src="http://static.robotwebtools.org/EventEmitter2/current/eventemitter2.min.js"></script>
 <script type="text/javascript" src="https://static.robotwebtools.org/roslibjs/current/roslib.js"></script>
 
+<!-- script for the form controls -->
 <script type="text/javascript" type="text/javascript">
 
-// This function connects to the rosbridge server running on the local computer on port 9090
-var rbServer = new ROSLIB.Ros({
+var UP_LIMIT = 0.276;
+var DOWN_LIMIT = 0.0;
+var LEFT_LIMIT = 0.200;
+var RIGHT_LIMIT = -0.200;
+var FORWARD_LIMIT = 0.347;
+var BACKWARD_LIMIT = 0.012;
+
+// Connect to local rosbridge server via 
+var ros = new ROSLIB.Ros({
     url : 'ws://localhost:9090'
  });
 
- // This function is called upon the rosbridge connection event
- rbServer.on('connection', function() {
-     // Write appropriate message to #feedback div when successfully connected to rosbridge
-     var fbDiv = document.getElementById('feedback');
-     fbDiv.innerHTML += "<p>Connected to websocket server.</p>";
+ // Called on connection, outputs feedback to indicate connection success
+ ros.on('connection', function() {
+     var fb = document.getElementById('feedback');
+     fb.innerHTML += "<p>Connected to websocket server.</p>";
  });
 
-// This function is called when there is an error attempting to connect to rosbridge
-rbServer.on('error', function(error) {
-    // Write appropriate message to #feedback div upon error when attempting to connect to rosbridge
-    var fbDiv = document.getElementById('feedback');
-    fbDiv.innerHTML += "<p>Error connecting to websocket server.</p>";
+// Called on error. outputs error for user to see.
+ros.on('error', function(error) {
+    var fb = document.getElementById('feedback');
+    fb.innerHTML += "<p>Error connecting to websocket server.</p>";
 });
 
-// This function is called when the connection to rosbridge is closed
-rbServer.on('close', function() {
-    // Write appropriate message to #feedback div upon closing connection to rosbridge
-    var fbDiv = document.getElementById('feedback');
-    fbDiv.innerHTML += "<p>Connection to websocket server closed.</p>";
+// called on close. outputs feedback to indicate server shutdown
+ros.on('close', function() {
+    var fb = document.getElementById('feedback');
+    fb.innerHTML += "<p>Connection to websocket server closed.</p>";
  });
 
-/*// These lines create a topic object as defined by roslibjs
-var cmdVelTopic = new ROSLIB.Topic({
-    ros : rbServer,
-    name : 'open_manipulator_msgs/SetKinematicsPose',
-    messageType : 'geometry_msgs/Twist'
-});*/
-
+// Create a listener for the kinematicsPose topic
 var listener = new ROSLIB.Topic({
-    ros : rbServer,
+    ros : ros,
     name : '/open_manipulator/gripper/kinematics_pose',
     messageType : 'open_manipulator_msgs/KinematicsPose'
 });
 
-/*listener.subscribe(function(message) {
-    console.log('Received message on ' + listener.name + ': ' + message.pose.position.x);
-    listener.unsubscribe();
-});*/
-
+// Create a service that facilitates moving the arm.
 var moveArmClient = new ROSLIB.Service({
-    ros: rbServer,
+    ros: ros,
     name : '/open_manipulator/goal_task_space_path_position_only',
     serviceType : 'open_manipulator_msgs/SetKinematicsPose' 
 });
 
-var request = new ROSLIB.ServiceRequest({
+// Set up a service request with parameters for the moveArmClient.
+var req = new ROSLIB.ServiceRequest({
     planning_group : '',
     end_effector_name : 'gripper',
     kinematics_pose : {
@@ -84,165 +75,223 @@ var request = new ROSLIB.ServiceRequest({
         max_velocity_scaling_factor : 0.0,
         tolerance : 0.0
     },
-    path_time : 2.0
+    path_time : 0.5
 });
 
-var moving = false;
-/*
+// Calls the moveArmClient service with the requested parameters
+function callService() {
+	var retVal = true;
 
-// These lines create a message that conforms to the structure of the Twist defined in our ROS installation
-// It initalizes all properties to zero. They will be set to appropriate values before we publish this message.
-var twist = new ROSLIB.Message({
-    linear : {
-        x : 0.0,
-        y : 0.0,
-        z : 0.0
-    },
-    angular : {
-        x : 0.0,
-        y : 0.0,
-        z : 0.0
-    }
-});*/
-
-/* This function:
- - retrieves numeric values from the text boxes
- - assigns these values to the appropriate values in the twist message
- - publishes the message to the cmd_vel topic.
- 
-function pubMessage() {
-    /**
-    Set the appropriate values on the twist message object according to values in text boxes
-    It seems that turtlesim only uses the x property of the linear object 
-    and the z property of the angular object
-    *
-    var linearX = 0.0;
-    var angularZ = 0.0;
-
-    // get values from text input fields. Note for simplicity we are not validating.
-    linearX = 0 + Number(document.getElementById('linearXText').value);
-    angularZ = 0 + Number(document.getElementById('angularZText').value);
-
-    // Set the appropriate values on the message object
-    twist.linear.x = linearX;
-    twist.angular.z = angularZ;
-
-    // Publish the message 
-    cmdVelTopic.publish(twist);
-}
-*/
-function moveRobot(message) {
-    if (!moving) {
-        moving = true;
-        var request1 = new ROSLIB.ServiceRequest({
-            planning_group : '',
-            end_effector_name : 'gripper',
-            kinematics_pose : message,
-            path_time : 2.0
-        });
-
-
-        moveArmClient.callService(request1, function(result) {
-            console.log('Result for service call on '
-            + moveArmClient.name
-            + ': '
-            + result.is_planned);
-        });
-        moving = false;
-    }
-}
-
-function moveUp() {
-
-    listener.subscribe(function(message) {
-        console.log('Received message on ' + listener.name + ': ' + message.pose.position.z);
-
-        message.pose.position.z = message.pose.position.z + 0.01;
-        console.log('z : ' + message.pose.position.z);
-        moveRobot(message);
-        listener.unsubscribe();
-    });
-
-}
-
-function moveDown() {
-    listener.subscribe(function(message) {
-        console.log('Received message on ' + listener.name + ': ' + message.pose.position.z);
-
-        message.pose.position.z = message.pose.position.z - 0.01;
-        console.log('z : ' + message.pose.position.z);
-        moveRobot(message);
-        listener.unsubscribe();
-    });
-}
-
-function moveLeft() {
-    listener.subscribe(function(message) {
-        console.log('Received message on ' + listener.name + ': ' + message.pose.position.y);
-
-        message.pose.position.y = message.pose.position.y + 0.01;
-        console.log('y : ' + message.pose.position.y);
-        moveRobot(message);
-        listener.unsubscribe();
-    });
-}
-
-function moveRight() {
-    listener.subscribe(function(message) {
-        console.log('Received message on ' + listener.name + ': ' + message.pose.position.y);
-
-        message.pose.position.y = message.pose.position.y - 0.01;
-        console.log('y : ' + message.pose.position.y);
-        moveRobot(message);
-        listener.unsubscribe();
-    });
-}
-
-function moveForward() {
-    listener.subscribe(function(message) {
-        console.log('Received message on ' + listener.name + ': ' + message.pose.position.x);
-
-        message.pose.position.x = message.pose.position.x + 0.01;
-        console.log('x : ' + message.pose.position.x);
-        moveRobot(message);
-        listener.unsubscribe();
-    });
-}
-
-function moveBackward() {
-    listener.subscribe(function(message) {
-        console.log('Received message on ' + listener.name + ': ' + message.pose.position.x);
-
-        message.pose.position.x = message.pose.position.x - 0.01;
-        console.log('x : ' + message.pose.position.x);
-        moveRobot(message);
-        listener.unsubscribe();
-    });
-}
-
-function resetPos() {
-    moveArmClient.callService(request, function(result) {
+    moveArmClient.callService(req, function(result) {
         console.log('Result for service call on '
         + moveArmClient.name
         + ': '
         + result.is_planned);
+
+        retVal = result.is_planned;
     });
+
+    return retVal;
+}
+
+// Moves the arm up by 1 CM
+function moveUp() {
+
+	// Grab the output div.
+	var output = document.getElementById('output');
+
+	// Print information if arm has reached positive z limit
+	if (req.kinematics_pose.pose.position.z == UP_LIMIT) {
+		output.innerHTML = "<p>Upwards limit reached</p>";
+	} else {
+
+		req.kinematics_pose.pose.position.z += 0.01;
+		// print error if there is one
+		if (callService()) {
+	    	output.innerHTML = "<p>Moved arm 1cm upwards</p>";
+		} else {
+			output.innerHTML = "<p>Could not move arm upwards</p>";
+		}
+
+    	console.log('z : ' + req.kinematics_pose.pose.position.z);
+	}
+
+}
+
+// Moves the arm down by 1 CM
+function moveDown() {
+
+	// Grab the output div.
+	var output = document.getElementById('output');	
+
+	// Print information if arm has reached negative z limit
+	if (req.kinematics_pose.pose.position.z == DOWN_LIMIT) {
+		output.innerHTML = "<p>Downwards limit reached</p>";
+	} else {
+
+		req.kinematics_pose.pose.position.z -= 0.01;
+		// print error if there is one
+		if (callService()) {
+	    	output.innerHTML = "<p>Moved arm 1cm downwards</p>";
+		} else {
+			output.innerHTML = "<p>Could not move arm downwards</p>";
+		}
+
+    	console.log('z : ' + req.kinematics_pose.pose.position.z);
+	}
+}
+
+// Moves the arm left by 1 cm
+function moveLeft() {
+
+	// Grab the output div.
+	var output = document.getElementById('output');
+
+	// Print information if arm has reached positive y limit
+	if (req.kinematics_pose.pose.position.y == LEFT_LIMIT) {
+		output.innerHTML = "<p>Left limit reached</p>";
+	} else {
+
+		req.kinematics_pose.pose.position.y += 0.01;
+		// print error if there is one
+		if (callService()) {
+	    	output.innerHTML = "<p>Moved arm 1cm left</p>";
+		} else {
+			output.innerHTML = "<p>Could not move arm left</p>";
+		}
+	}
+
+    console.log('y : ' + req.kinematics_pose.pose.position.y);
+}
+
+// Moves the arm right by 1 CM
+function moveRight() {
+
+	// Grab the output div.
+	var output = document.getElementById('output');
+
+	// Print information if arm has reached negative y limit
+	if (req.kinematics_pose.pose.position.y == RIGHT_LIMIT) {
+		output.innerHTML = "<p>Right limit reached</p>";
+	} else {
+
+		req.kinematics_pose.pose.position.y -= 0.01;
+		// print error if there is one
+		if (callService()) {
+	    	output.innerHTML = "<p>Moved arm 1cm right</p>";
+		} else {
+			output.innerHTML = "<p>Could not move arm right</p>";
+		}
+	}
+
+    console.log('y : ' + req.kinematics_pose.pose.position.y);
+}
+
+// Moves the arm forwards by 1 CM
+function moveForward() {
+
+	// Grab the output div.
+	var output = document.getElementById('output');
+
+	// Print information if arm has reached positive x limit
+	if (req.kinematics_pose.pose.position.x == FORWARD_LIMIT) {
+		output.innerHTML = "<p>Forward limit reached</p>";
+	} else {
+
+		req.kinematics_pose.pose.position.x += 0.01;
+		// print error if there is one
+		if (callService()) {
+	    	output.innerHTML = "<p>Moved arm 1cm forwards</p>";
+		} else {
+			output.innerHTML = "<p>Could not move arm forwards</p>";
+		}
+	}
+
+    console.log('x : ' + req.kinematics_pose.pose.position.x);
+}
+
+// Moves the arm back by 1 CM
+function moveBackward() {
+
+	// Grab the output div.
+	var output = document.getElementById('output');
+
+	// Print information if arm has reached positive x limit
+	if (req.kinematics_pose.pose.position.x == BACKWARD_LIMIT) {
+		output.innerHTML = "<p>Forward limit reached</p>";
+	} else {
+
+		req.kinematics_pose.pose.position.x -= 0.01;
+		// print error if there is one
+		if (callService()) {
+	    	output.innerHTML = "<p>Moved arm 1cm backwards</p>";
+		} else {
+			output.innerHTML = "<p>Could not move arm backwards</p>";
+		}
+	}
+
+    console.log('x : ' + req.kinematics_pose.pose.position.x);
+}
+
+// Resets the arm to its initial position.
+function resetPos() {
+
+	// Grab the output div.
+	var output = document.getElementById('output');
+
+	// Parameters for the initial position
+	req.kinematics_pose.pose = {
+            position : {
+                x : 0.286,
+                y : 0.0,
+                z : 0.2045
+            },
+            orientation : {
+                x : 0.0,
+                y : 0.0,
+                z : 0.0,
+                w : 1.0
+            }
+    }
+
+	if (callService()) {
+    	output.innerHTML = "<p>Position reset</p>";
+	} else {
+		output.innerHTML = "<p>Could not reset position</p>";
+	}
+
+
 }
 
 </script>
 </head>
-
-<body>
-<form name="ctrlPanel">
+<body style="
+    background-color: #ccebff;
+">
+<form name="ctrlPanel" style="
+	  		 padding-right: 20px;
+	  		 margin: auto;
+	  		 width: 30%;
+	  		 border: 2px solid #000000;
+	  		 padding: 15px;
+	  		 ">
 <button id="up" type="button" onclick="moveUp()">UP</button>
 <button id="down" type="button" onclick="moveDown()">DOWN</button>
+<br>
 <button id="left" type="button" onclick="moveLeft()">LEFT</button>
 <button id="right" type="button" onclick="moveRight()">RIGHT</button>
+<br>
 <button id="left" type="button" onclick="moveForward()">FORWARD</button>
 <button id="right" type="button" onclick="moveBackward()">BACKWARD</button>
 <button id="reset" type="button" onclick="resetPos()">RESET POS</button>
 </form>
-<div id="feedback"></div>
-<div id="output"></div>
+<div id="feedback" style="
+    text-align: center;
+"></div>
+<div id="output" style="
+    text-align: center;
+"></div>
+
+
 </body>
 </html>
