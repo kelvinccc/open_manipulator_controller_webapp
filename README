@@ -1,0 +1,14 @@
+A webapp that uses roslibjs and ROS to control an openmanipulator x
+
+INSTRUCTIONS:
+
+1. Open terminal and launch the gazebo simulator:
+  roslaunch open_manipulator_gazebo open_manipulator_gazebo.launch
+
+2. Launch a rosbridge server instance:
+  roslaunch rosbridge_server rosbridge_websocket.launch
+
+3. Launch the controller node:
+  roslaunch open_manipulator_controller open_manipulator_controller.launch use_platform:=false
+  
+4. Click on the index.html file
